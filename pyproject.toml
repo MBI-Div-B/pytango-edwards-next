@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tangods_edwards_next_control"
+description = "Edwards nEXT TangoDS"
+keywords = ["tango device", "tango", "pytango", "edwards", "turbopump"]
+readme = "README.md"
+authors = [
+    {name = "Leonid Lunin", email = "lunin.leonid@gmail.com"},
+]
+requires-python = ">=3.10"
+dependencies = ['pytango', 'edwardsserial @ git+https://github.com/MBI-Div-B/edwardsserial.git']
+license = {text = "GPL-3.0-or-later"}
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/MBI-Div-B/pytango-edwards-next.git"
+
+[project.scripts]
+EdwardsNextControl = "tangods_edwards_next_control:main"
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
+
+[tool.setuptools.packages.find]
+
+[tool.setuptools.package-data]
+tangods_turbovac_control = ["VERSION"]
