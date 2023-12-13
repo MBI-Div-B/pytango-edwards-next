@@ -67,7 +67,7 @@ class EdwardsNextControl(Device):
     power = attribute(
         label="power",
         dtype=float,
-        unit="V",
+        unit="W",
         format="%2.2f",
     )
 
@@ -153,7 +153,7 @@ class EdwardsNextControl(Device):
         # the ControlInterface will be created and auto_update is running instantly
         # we need to firstly disable auto_update
         self._control_interface = nEXT(
-            com_port=self.Port,
+            com_port=self.SerialPort,
             socket_hostname=self.HostName,
             socket_port=self.PortNumber,
             connection_type=self.ConnectType,
