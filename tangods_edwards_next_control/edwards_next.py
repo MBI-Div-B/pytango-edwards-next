@@ -91,6 +91,16 @@ class EdwardsNextControl(Device):
 
     def dev_state(self):
         state = DevState.UNKNOWN
+        now = time.time()
+        if (now - self._last_state_query) > 0.2:
+            (
+                self._frequency,
+                state_bits,
+            ) = self._control_interface.get_speed_and_state()
+            self._state = list(
+                filter(lambda ind: state_bits & (1 << ind), nEXT.STATUS_BITS.keys())
+            )
+            self._last_state_query = now
         status_codes = self._state
         # STATUS_BITS = {
         # 0: "Fail status condition active",
@@ -124,8 +134,17 @@ class EdwardsNextControl(Device):
         return state
 
     def dev_status(self):
-        status_codes = self._state
-        return "\n".join(map(self.STATUS_BITS.get, status_codes))
+        now = time.time()
+        if (now - self._last_state_query) > 0.2:
+            (
+                self._frequency,
+                state_bits,
+            ) = self._control_interface.get_speed_and_state()
+            self._state = list(
+                filter(lambda ind: state_bits & (1 << ind), nEXT.STATUS_BITS.keys())
+            )
+            self._last_state_query = now
+        return "\n".join(map(nEXT.STATUS_BITS.get, self._state))
 
     def read_attr_hardware(self, attr_list):
         attr_names = [
@@ -133,14 +152,17 @@ class EdwardsNextControl(Device):
             for attr_id in attr_list
         ]
         now = time.time()
-        if "frequency" in attr_names or "State" in attr_names or "Status" in attr_names:
+        if "frequency" in attr_names:
             if (now - self._last_state_query) > 0.2:
                 (
                     self._frequency,
-                    self._state,
+                    state_bits,
                 ) = self._control_interface.get_speed_and_state()
+                self._state = list(
+                    filter(lambda ind: state_bits & (1 << ind), nEXT.STATUS_BITS.keys())
+                )
                 self._last_state_query = now
-        if "current" in attr_names or "votage" in attr_names or "power" in attr_names:
+        if "current" in attr_names or "voltage" in attr_names or "power" in attr_names:
             if (now - self._last_link_query) > 0.2:
                 (
                     self._voltage,
