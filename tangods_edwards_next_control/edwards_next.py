@@ -91,16 +91,6 @@ class EdwardsNextControl(Device):
 
     def dev_state(self):
         state = DevState.UNKNOWN
-        now = time.time()
-        if (now - self._last_state_query) > 0.2:
-            (
-                self._frequency,
-                state_bits,
-            ) = self._control_interface.get_speed_and_state()
-            self._state = list(
-                filter(lambda ind: state_bits & (1 << ind), nEXT.STATUS_BITS.keys())
-            )
-            self._last_state_query = now
         status_codes = self._state
         # STATUS_BITS = {
         # 0: "Fail status condition active",
@@ -108,8 +98,9 @@ class EdwardsNextControl(Device):
         # 2: "Above normal speed",
         # 3: "Vent valve energised",
         # 4: "Start command active",
-        # 6: "Serial enable active",
-        # 7: "Above 50%\ rotational speed",
+        # 5: "Serial enable active",
+        # 6: "Standby active",
+        # 7: "Above 50% rotational speed",
         # 8: "Exclusive control mode selection",
         # 9: "Exclusive control mode selection",
         # 10: "Controller internal software mismatch",
@@ -119,23 +110,23 @@ class EdwardsNextControl(Device):
         # 14: "Thermistor error",
         # 15: "Serial enable become inactivate following a serial Start command",
         # }
-        if 0 in status_codes:
-            state = DevState.INIT
-        if 4 in status_codes or 5 in status_codes:
-            state = DevState.MOVING
-        if 2 in status_codes:
-            state = DevState.RUNNING
-        if 11 in status_codes:
+        if 1 in status_codes:
             state = DevState.ON
-        if 14 in status_codes or 13 in status_codes or 14 in status_codes:
+        if 1 not in status_codes and 2 not in status_codes or 4 in status_codes:
+            state = DevState.MOVING
+        if 2 in status_codes or 7 in status_codes:
+            state = DevState.RUNNING
+        if any(x >= 10 for x in status_codes):
             state = DevState.ALARM
-        if 0 in status_codes:
-            state = DevState.FAULT
         return state
 
     def dev_status(self):
+        return "\n".join(map(nEXT.STATUS_BITS.get, self._state))
+
+    def always_executed_hook(self):
         now = time.time()
-        if (now - self._last_state_query) > 0.2:
+        if (now - self._last_query) > 0.3:
+            # speed and state
             (
                 self._frequency,
                 state_bits,
@@ -143,40 +134,18 @@ class EdwardsNextControl(Device):
             self._state = list(
                 filter(lambda ind: state_bits & (1 << ind), nEXT.STATUS_BITS.keys())
             )
-            self._last_state_query = now
-        return "\n".join(map(nEXT.STATUS_BITS.get, self._state))
-
-    def read_attr_hardware(self, attr_list):
-        attr_names = [
-            self.get_device_attr().get_attr_by_ind(attr_id).get_name()
-            for attr_id in attr_list
-        ]
-        now = time.time()
-        if "frequency" in attr_names:
-            if (now - self._last_state_query) > 0.2:
-                (
-                    self._frequency,
-                    state_bits,
-                ) = self._control_interface.get_speed_and_state()
-                self._state = list(
-                    filter(lambda ind: state_bits & (1 << ind), nEXT.STATUS_BITS.keys())
-                )
-                self._last_state_query = now
-        if "current" in attr_names or "voltage" in attr_names or "power" in attr_names:
-            if (now - self._last_link_query) > 0.2:
-                (
-                    self._voltage,
-                    self._current,
-                    self._power,
-                ) = self._control_interface.get_link()
-                self._last_link_query = now
-        if "controller_temperature" in attr_names or "motor_temperature" in attr_names:
-            if (now - self._last_temp_query) > 0.2:
-                (
-                    self._motor_temp,
-                    self._controller_temp,
-                ) = self._control_interface.get_temps()
-                self._last_temp_query = now
+            # voltage, current and powre
+            (
+                self._voltage,
+                self._current,
+                self._power,
+            ) = self._control_interface.get_link()
+            # temperatures
+            (
+                self._motor_temp,
+                self._controller_temp,
+            ) = self._control_interface.get_temps()
+            self._last_query = now
 
     @command
     def turn_off(self):
@@ -199,9 +168,7 @@ class EdwardsNextControl(Device):
             connection_type=self.ConnectType,
         )
         self.init_dynamic_attributes()
-        self._last_state_query = (
-            self._last_link_query
-        ) = self._last_temp_query = time.time()
+        self._last_query = 0
 
     def init_dynamic_attributes(self):
         if self.Pressure_device_FQDN is not None:
