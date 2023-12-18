@@ -72,36 +72,26 @@ class EdwardsNextControl(Device):
     )
 
     def read_frequency(self):
-        return self._control_interface.speed
+        return self._frequency
 
     def read_motor_temperature(self):
-        return self._control_interface.motor_temperature
+        return self._motor_temp
 
     def read_controller_temperature(self):
-        return self._control_interface.controller_temperature
+        return self._controller_temp
 
     def read_current(self):
-        return self._control_interface.link_current
+        return self._current
 
     def read_voltage(self):
-        return self._control_interface.link_voltage
+        return self._voltage
 
     def read_power(self):
-        return self._control_interface.link_power
-
-    def fetch_state(self):
-        now = time.time()
-        if now - self._last_state_query > 0.2:
-            self._last_state_query = now
-            state_bits = self._control_interface.state()
-            self._status_codes = list(
-                filter(lambda ind: state_bits & (1 << ind), nEXT.STATUS_BITS.keys())
-            )
+        return self._power
 
     def dev_state(self):
         state = DevState.UNKNOWN
-        self.fetch_state()
-        status_codes = self._status_codes
+        status_codes = self._state
         # STATUS_BITS = {
         # 0: "Fail status condition active",
         # 1: "Below stopped speed",
@@ -134,9 +124,37 @@ class EdwardsNextControl(Device):
         return state
 
     def dev_status(self):
-        self.fetch_state()
-        status_codes = self._status_codes
+        status_codes = self._state
         return "\n".join(map(self.STATUS_BITS.get, status_codes))
+
+    def read_attr_hardware(self, attr_list):
+        attr_names = [
+            self.get_device_attr().get_attr_by_ind(attr_id).get_name()
+            for attr_id in attr_list
+        ]
+        now = time.time()
+        if "frequency" in attr_names or "State" in attr_names or "Status" in attr_names:
+            if (now - self._last_state_query) > 0.2:
+                (
+                    self._frequency,
+                    self._state,
+                ) = self._control_interface.get_speed_and_state()
+                self._last_state_query = now
+        if "current" in attr_names or "votage" in attr_names or "power" in attr_names:
+            if (now - self._last_link_query) > 0.2:
+                (
+                    self._voltage,
+                    self._current,
+                    self._power,
+                ) = self._control_interface.get_link()
+                self._last_link_query = now
+        if "controller_temperature" in attr_names or "motor_temperature" in attr_names:
+            if (now - self._last_temp_query) > 0.2:
+                (
+                    self._motor_temp,
+                    self._controller_temp,
+                ) = self._control_interface.get_temps()
+                self._last_temp_query = now
 
     @command
     def turn_off(self):
@@ -158,10 +176,10 @@ class EdwardsNextControl(Device):
             socket_port=self.PortNumber,
             connection_type=self.ConnectType,
         )
-        self._last_state_query = time.time()
         self.init_dynamic_attributes()
-        # then set the default value for pump_on to False
-        # ask once to avoid empty variables
+        self._last_state_query = (
+            self._last_link_query
+        ) = self._last_temp_query = time.time()
 
     def init_dynamic_attributes(self):
         if self.Pressure_device_FQDN is not None:
