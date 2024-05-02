@@ -1,6 +1,7 @@
 from tango import DevState, DeviceProxy
 from tango.server import Device, attribute, command, device_property, GreenMode
 from edwardsserial.nEXT import nEXT
+import threading
 import time
 
 
@@ -154,6 +155,23 @@ class EdwardsNextControl(Device):
     @command
     def turn_on(self):
         self._control_interface.start()
+
+    @command(dtype_in=float, doc_in="minimal pressure in mbar")
+    def turn_on_at_pressure(self, setpoint):
+        if self.get_pressure("pressure") is not None:
+            threading.Thread(target=self._pressure_check, args=(setpoint,)).start()
+
+    @command
+    def abort_turn_on_at_pressure(self):
+        self._abort_turn_on = True
+
+    def _pressure_check(self, setpoint):
+        self._abort_turn_on = False
+        while self.get_pressure() > setpoint:
+            if self._abort_turn_on:
+                return
+            time.sleep(10)
+        self.turn_on()
 
     def init_device(self):
         Device.init_device(self)
